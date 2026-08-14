@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg17
+    container_name: payment-diagnostics-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-payment_diagnostics}
+      POSTGRES_USER: ${POSTGRES_USER:-payment_diagnostics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+    ports:
+      - "${PAYMENT_DIAGNOSTICS_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - payment-diagnostics-postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  payment-diagnostics-postgres-data:
+    name: payment-diagnostics-postgres-data

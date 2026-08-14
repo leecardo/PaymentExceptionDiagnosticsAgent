@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: payment-diagnostics-agent-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/${POSTGRES_DB:payment_diagnostics}}
+    username: ${POSTGRES_USER:payment_diagnostics}
+    password: ${POSTGRES_PASSWORD:payment_diagnostics}
+  flyway:
+    enabled: ${APP_FLYWAY_ENABLED:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  ai:
+    enabled: ${APP_AI_ENABLED:false}
+    base-url: ${OPENAI_BASE_URL:}
+    api-key: ${OPENAI_API_KEY:}
+    model-name: ${OPENAI_MODEL_NAME:}

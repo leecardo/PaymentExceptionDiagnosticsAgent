@@ -1,0 +1,44 @@
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+secrets/
+
+# Logs and runtime output
+logs/
+*.log
+*.pid
+
+# Java / Maven / Spring Boot
+backend/**/target/
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Build and coverage output
+coverage/
+.nyc_output/
+
+# Docker/local data
+.deploy-data/
+docker-compose.override.yml
