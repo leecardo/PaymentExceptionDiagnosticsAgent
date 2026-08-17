@@ -6,13 +6,15 @@ import java.util.Objects;
 /**
  * Immutable fact collected from a controlled read-only diagnostic source.
  *
+ * @param id stable evidence identifier within a diagnosis result
  * @param source tool or system that produced the observation
  * @param summary human-readable observation without fabricated conclusions
  * @param observedAt time the source fact was observed or recorded
  */
-public record DiagnosisEvidence(String source, String summary, Instant observedAt) {
+public record DiagnosisEvidence(String id, String source, String summary, Instant observedAt) {
 
     public DiagnosisEvidence {
+        id = requireText(id, "id");
         source = requireText(source, "source");
         summary = requireText(summary, "summary");
         Objects.requireNonNull(observedAt, "observedAt must not be null");
