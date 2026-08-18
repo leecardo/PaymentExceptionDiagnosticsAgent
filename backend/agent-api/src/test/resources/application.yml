@@ -6,3 +6,6 @@ spring:
 app:
   ai:
     enabled: false
+  diagnosis:
+    payment-processing-timeout: 15m
+    message-consumption-timeout: 5m

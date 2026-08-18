@@ -5,14 +5,17 @@ import java.util.Objects;
 
 /**
  * Immutable outcome produced by applying one diagnosis rule to an order.
+ * <p>诊断结果绑定订单、数据模式、流程阶段、规则标识、摘要、证据和数据质量警告。
+ * 除 {@link DiagnosisRuleId#NO_KNOWN_EXCEPTION} 和 {@link DiagnosisRuleId#INSUFFICIENT_EVIDENCE} 外，
+ * 其他规则结果必须至少携带一条证据，避免输出无事实支撑的异常结论。</p>
  *
- * @param orderId order being diagnosed
- * @param dataMode source mode used to collect diagnostic data
- * @param stage coarse payment flow stage identified by the rule
- * @param ruleId stable rule identifier
- * @param summary human-readable rule outcome
- * @param evidence source facts supporting the outcome
- * @param warnings non-fatal data quality notes emitted while diagnosing
+ * @param orderId 被诊断订单号
+ * @param dataMode 诊断数据来源模式
+ * @param stage 规则识别出的粗粒度支付流程阶段
+ * @param ruleId 稳定诊断规则标识
+ * @param summary 可读的规则结论摘要，不能为空白
+ * @param evidence 支撑结论的来源事实；需要证据的规则不能为空
+ * @param warnings 诊断过程产生的非致命数据质量提示，元素不能为空白
  */
 public record DiagnosisResult(
         OrderId orderId,
@@ -23,6 +26,9 @@ public record DiagnosisResult(
         List<DiagnosisEvidence> evidence,
         List<String> warnings) {
 
+    /**
+     * 复制证据和警告列表以保持不可变，并校验需要证据的规则不能输出空证据结果。
+     */
     public DiagnosisResult {
         Objects.requireNonNull(orderId, "orderId must not be null");
         Objects.requireNonNull(dataMode, "dataMode must not be null");

@@ -2,7 +2,7 @@
 
 支付异常诊断 Agent：面向订单、支付流水、消息、补偿任务和调用链路的证据收集与异常阶段判断系统。
 
-项目当前处于**工程骨架阶段**。后端、MCP Server 和前端均可构建、启动并完成状态验证；支付诊断工作流、MCP 查询工具和 RAG 尚未实现。项目不会使用固定文本或模拟模型回答伪装诊断能力。
+项目已完成**确定性诊断模拟后端切片**。通过 `simulation` profile，系统可从版本化场景数据加载事实，运行 15 条确定性诊断规则，并通过 REST API 返回带证据来源的诊断结论。真实 PostgreSQL、消息中间件和前端诊断界面尚未接入。
 
 ## 项目目标
 
@@ -22,13 +22,15 @@
 | 能力 | 状态 | 说明 |
 |---|---|---|
 | Maven 多模块工程 | 已完成 | Java 21，五个后端模块 |
-| Agent API | 已完成骨架 | 提供状态接口和模型配置边界 |
+| 领域模型 | 已完成 | 订单、支付、消息、补偿、Trace 五类不可变事实，15 条确定性诊断规则 |
+| 应用层 | 已完成 | 五类只读查询端口、订单查询用例、诊断用例、固定顺序证据收集 |
+| 基础设施模拟适配器 | 已完成 | 版本化 JSON 场景加载器、不可变五端口内存适配器、15 个模拟场景 |
+| Agent API | 已完成 | 订单查询、诊断查询、稳定错误响应（400/404/503） |
 | Java MCP Server | 已完成骨架 | Streamable HTTP `/mcp`，当前未注册业务工具 |
 | Vue 3 前端 | 已完成骨架 | 展示 API 连通状态，未提供诊断界面 |
-| PostgreSQL + pgvector | 已配置 | 提供 Docker Compose 和 vector 初始化 SQL |
-| 支付诊断领域模型 | 部分完成 | 已有诊断阶段和诊断证据基础模型 |
-| 订单/支付查询 | 未实现 | 后续按纵向切片开发 |
-| Agent 工具调用 | 未实现 | 不提供假工具或假结果 |
+| PostgreSQL + pgvector | 已配置 | Flyway V2 建表迁移、脱敏演示数据 SQL 已就绪，未实际执行验证 |
+| 消息事件契约 | 已完成 | 厂商无关事件 Schema 和拓扑描述，未绑定具体消息中间件 |
+| Agent 工具调用 | 未实现 | 后续将诊断用例暴露为 MCP 白名单工具 |
 | RAG 与评测 | 未实现 | 后续建立知识检索与固定评测集 |
 
 ## 技术栈
@@ -63,17 +65,23 @@
 ├── pom.xml
 ├── backend/
 │   ├── pom.xml
-│   ├── agent-domain/
-│   ├── agent-application/
-│   ├── agent-infrastructure/
-│   ├── agent-api/
-│   └── mcp-server/
+│   ├── agent-domain/          # 领域模型、值对象、领域不变量
+│   ├── agent-application/     # 诊断用例、查询端口、规则引擎
+│   ├── agent-infrastructure/  # 模拟适配器、AI 模型配置
+│   ├── agent-api/             # REST 控制器、错误处理、Spring 装配
+│   └── mcp-server/            # 独立 MCP Server
 ├── frontend/
 ├── deploy/
 │   ├── docker-compose.yml
-│   └── postgres/init/001_pgvector.sql
+│   ├── postgres/
+│   │   ├── init/001_pgvector.sql
+│   │   └── demo/001_payment_diagnosis_scenarios.sql
+│   └── messaging/
+│       ├── payment-events.schema.json
+│       └── topology.json
 └── docs/
     ├── design/project-design.md
+    ├── design/simulation-flow.md
     ├── roadmap/development-roadmap.md
     └── superpowers/
 ```
@@ -84,11 +92,11 @@
 |---|---|
 | `agent-domain` | 领域模型、值对象、领域规则；不依赖 Spring 或基础设施 |
 | `agent-application` | 诊断用例、工作流、端口接口和状态转换 |
-| `agent-infrastructure` | PostgreSQL、pgvector、LangChain4j 和外部系统适配器 |
+| `agent-infrastructure` | 模拟适配器、PostgreSQL/pgvector（待实现）、LangChain4j 和外部系统适配 |
 | `agent-api` | REST/SSE、参数校验、错误响应和应用装配 |
 | `mcp-server` | 独立本地 MCP Server，后续暴露只读、强类型工具 |
 | `frontend` | 诊断控制台、执行轨迹、证据和人工确认界面 |
-| `deploy` | 本地 PostgreSQL + pgvector 编排和初始化 |
+| `deploy` | PostgreSQL + pgvector 编排、演示数据和消息契约 |
 
 依赖只允许向稳定内层流动：
 
@@ -155,7 +163,7 @@ npm --prefix frontend run build
 docker compose -f deploy/docker-compose.yml up -d postgres
 ```
 
-### 2. Agent API
+### 2. Agent API（模拟模式）
 
 先安装本地多模块依赖：
 
@@ -163,13 +171,13 @@ docker compose -f deploy/docker-compose.yml up -d postgres
 mvn install -DskipTests
 ```
 
-启动 API：
+启动模拟模式 API：
 
 ```bash
-mvn -f backend/agent-api/pom.xml spring-boot:run
+mvn -f backend/agent-api/pom.xml spring-boot:run -Dspring-boot.run.profiles=simulation
 ```
 
-默认端口：`8080`。
+默认端口：`8080`。`simulation` profile 激活后可访问订单和诊断接口。
 
 ### 3. MCP Server
 
@@ -189,7 +197,7 @@ npm --prefix frontend run dev
 
 ## 当前可验证接口
 
-Agent API：
+### 状态接口
 
 ```bash
 curl http://localhost:8080/api/status
@@ -199,7 +207,23 @@ curl http://localhost:8080/api/status
 {"service":"payment-diagnostics-agent-api","state":"UP"}
 ```
 
-MCP Server：
+### 订单查询（仅 simulation profile）
+
+```bash
+curl http://localhost:8080/api/orders/SIM-NORMAL-001
+```
+
+返回脱敏订单事实，不包含客户身份或配送地址等敏感字段。
+
+### 诊断查询（仅 simulation profile）
+
+```bash
+curl http://localhost:8080/api/diagnoses/orders/SIM-CALLBACK-MISSING-001
+```
+
+返回诊断结果，包含 `dataMode=SIMULATION`、`ruleId`、`stage`、`evidence[]` 和 `warnings[]`。
+
+### MCP Server
 
 ```bash
 curl http://localhost:8081/api/status
@@ -209,23 +233,14 @@ curl http://localhost:8081/api/status
 {"service":"payment-diagnostics-mcp-server","state":"UP","endpoint":"/mcp"}
 ```
 
-MCP `initialize` 示例：
+### 错误响应
 
-```bash
-curl -X POST http://localhost:8081/mcp \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  --data '{
-    "jsonrpc":"2.0",
-    "id":1,
-    "method":"initialize",
-    "params":{
-      "protocolVersion":"2025-11-25",
-      "capabilities":{},
-      "clientInfo":{"name":"local-smoke","version":"1.0.0"}
-    }
-  }'
-```
+| 场景 | HTTP 状态 | 错误码 |
+|---|---|---|
+| 订单号非法 | 400 | `INVALID_ORDER_ID` |
+| 订单不存在 | 404 | `ORDER_NOT_FOUND` |
+| 数据源不可用 | 503 | `FACT_SOURCE_UNAVAILABLE` |
+| 数据源超时 | 503 | `FACT_SOURCE_TIMEOUT` |
 
 ## 安全原则
 
@@ -235,12 +250,13 @@ curl -X POST http://localhost:8081/mcp \
 - 敏感支付数据进入模型上下文前必须脱敏。
 - 写操作和支付补偿必须由人工确认。
 - 每次模型调用和工具调用必须可审计。
-- 信息不足时返回“证据不足”，不能编造异常原因。
+- 信息不足时返回"证据不足"，不能编造异常原因。
 - Agent 必须设置步骤、超时、重试和成本上限。
 
 ## 文档
 
 - [项目设计](docs/design/project-design.md)
+- [模拟流程设计](docs/design/simulation-flow.md)
 - [开发路线](docs/roadmap/development-roadmap.md)
 - [编码代理规则](AGENTS.md)
 - [初始架构规格](docs/superpowers/specs/2026-08-14-payment-diagnostics-agent-design.md)
@@ -248,13 +264,17 @@ curl -X POST http://localhost:8081/mcp \
 
 ## 当前验证结果
 
-脚手架建立时已验证：
+确定性诊断模拟后端切片验证：
 
-- Maven 全模块测试通过：6 个测试，0 失败；
-- Maven 打包成功；
-- Vue TypeScript 生产构建成功；
-- Agent API 与 MCP Server 可独立启动；
-- MCP `/mcp` 完成真实协议初始化；
-- Chromium 中前端成功展示 API `UP` 状态。
+- Maven 全模块测试通过：148 个测试，0 失败；
+  - 领域层 48 | 应用层 50 | 基础设施层 28 | API 层 21 | MCP 1
+- API 烟雾流程已执行：
+  - `simulation` profile 下订单查询和诊断查询返回正确结果；
+  - 非法订单号返回 400，不存在订单返回 404；
+  - 默认 profile 下诊断端点返回 404（模拟端点正确隔离）；
+- 部署资产已验证：
+  - Flyway V2 迁移包含五表、约束、索引；
+  - 脱敏演示数据 SQL 与 JSON 场景一致；
+  - 消息事件契约和拓扑描述结构正确。
 
-由于验证环境未安装 Docker，PostgreSQL/pgvector 容器尚未实际启动验证。数据库相关功能进入首个数据切片前必须补做 Compose、迁移和连接验证。
+由于验证环境未安装 Docker，PostgreSQL/pgvector 容器和 Flyway 迁移尚未在实际数据库上执行验证。

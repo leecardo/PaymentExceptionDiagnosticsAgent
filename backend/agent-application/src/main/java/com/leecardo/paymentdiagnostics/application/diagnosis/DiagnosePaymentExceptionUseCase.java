@@ -21,6 +21,9 @@ import com.leecardo.paymentdiagnostics.domain.OrderSnapshot;
 import com.leecardo.paymentdiagnostics.domain.PaymentTransaction;
 import com.leecardo.paymentdiagnostics.domain.TraceSummary;
 
+/**
+ * 诊断支付异常用例，编排订单、支付、消息、补偿与 Trace 五类事实收集并委托规则引擎诊断。
+ */
 public final class DiagnosePaymentExceptionUseCase {
 
     private final OrderQueryPort orderQueryPort;
@@ -32,6 +35,18 @@ public final class DiagnosePaymentExceptionUseCase {
     private final Clock clock;
     private final DataMode dataMode;
 
+    /**
+     * 创建诊断用例，注入所有事实查询端口、确定性规则引擎、时钟和数据模式。
+     *
+     * @param orderQueryPort 订单查询端口
+     * @param paymentQueryPort 支付流水查询端口
+     * @param messageQueryPort 消息投递查询端口
+     * @param compensationQueryPort 补偿任务查询端口
+     * @param traceQueryPort 调用链路摘要查询端口
+     * @param rules 确定性诊断规则引擎
+     * @param clock 统一观察时间来源
+     * @param dataMode 当前事实数据模式
+     */
     public DiagnosePaymentExceptionUseCase(
             OrderQueryPort orderQueryPort,
             PaymentQueryPort paymentQueryPort,
@@ -51,6 +66,16 @@ public final class DiagnosePaymentExceptionUseCase {
         this.dataMode = Objects.requireNonNull(dataMode, "dataMode must not be null");
     }
 
+    /**
+     * 按固定顺序收集 order -> payment -> message -> compensation -> trace 五类事实并执行诊断。
+     *
+     * <p>订单缺失是业务记录不存在，会转换为 OrderNotFoundException；任一下游查询失败不得被当作业务记录缺失，
+     * 应由端口以异常表达。observedAt 只从 Clock 获取一次，保证规则引擎对所有事实使用同一观察时刻。
+     *
+     * @param orderId 外部传入的订单号
+     * @return 支付异常诊断结果
+     * @throws OrderNotFoundException 当订单事实确认不存在时抛出
+     */
     public DiagnosisResult diagnose(String orderId) {
         OrderId parsedOrderId = new OrderId(orderId);
         OrderSnapshot order = requireNonNull(orderQueryPort.findById(parsedOrderId), "order")
@@ -73,6 +98,9 @@ public final class DiagnosePaymentExceptionUseCase {
     }
 
 
+    /**
+     * 校验端口返回值不为 null，避免把适配器契约错误误判为缺失事实。
+     */
     private static <T> T requireNonNull(T result, String portName) {
         return Objects.requireNonNull(result, portName + " query must not return null");
     }

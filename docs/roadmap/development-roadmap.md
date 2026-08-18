@@ -28,6 +28,27 @@
 - Agent 工作流、RAG、审批和评测尚未实现；
 - 当前开发环境缺少 Docker，数据库容器尚未实际验证。
 
+## 2.5 模拟诊断路径完成状态（2026-08-18 验证）
+
+以下能力已通过 `simulation` profile 实现并验证：
+
+- **领域层**：订单、支付流水、消息投递、补偿任务、Trace 摘要不可变事实类型，15 条确定性诊断规则；
+- **应用层**：五类只读查询端口、`GetOrderUseCase`、`DiagnosePaymentExceptionUseCase`、固定顺序证据收集流程；
+- **基础设施层**：版本化 JSON 场景加载器、不可变五端口内存适配器、15 个模拟场景；
+- **接口层**：`GET /api/orders/{orderId}`、`GET /api/diagnoses/orders/{orderId}`、稳定错误响应（`INVALID_ORDER_ID`/`ORDER_NOT_FOUND`/`FACT_SOURCE_UNAVAILABLE`/`FACT_SOURCE_TIMEOUT`）；
+- **部署资产**：Flyway V2 建表迁移（五表 + 约束 + 索引）、脱敏演示数据 SQL（幂等）、厂商无关消息事件契约和拓扑描述；
+- **验证**：148 个测试全部通过；API 烟雾流程已执行（正常订单、诊断、404、400）；默认 profile 下模拟端点不可访问。
+
+以下尚未完成（不标记 M1–M3 为完全完成）：
+
+- 真实 PostgreSQL + Flyway 迁移执行验证；
+- Testcontainers 仓储测试；
+- 真实消息中间件拓扑初始化；
+- 前端订单和诊断页面；
+- 浏览器端验证。
+
+模拟结果标识为 `SIMULATION` 数据模式，不是生产证据。
+
 ## 3. 里程碑总览
 
 | 里程碑 | 交付结果 | 关键证明 |

@@ -12,6 +12,11 @@ import com.leecardo.paymentdiagnostics.domain.OrderSnapshot;
 import com.leecardo.paymentdiagnostics.domain.PaymentTransaction;
 import com.leecardo.paymentdiagnostics.domain.TraceSummary;
 
+/**
+ * 收集到的诊断事实集合，是规则引擎的只读输入快照。
+ *
+ * <p>包含订单、支付流水、消息投递、补偿任务、Trace 摘要、统一观察时间、数据模式和警告。
+ */
 public record CollectedFacts(
         OrderSnapshot order,
         List<PaymentTransaction> payments,
@@ -22,6 +27,9 @@ public record CollectedFacts(
         DataMode dataMode,
         List<String> warnings) {
 
+    /**
+     * 标准化事实集合，防止空引用和可变集合进入规则引擎。
+     */
     public CollectedFacts {
         Objects.requireNonNull(order, "order must not be null");
         payments = List.copyOf(Objects.requireNonNull(payments, "payments must not be null"));

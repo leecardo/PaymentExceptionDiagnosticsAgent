@@ -3,6 +3,21 @@ package com.leecardo.paymentdiagnostics.domain;
 import java.time.Instant;
 import java.util.Objects;
 
+/**
+ * 补偿任务记录，表示针对支付异常订单创建的修复、重推或同步动作。
+ * <p>构造时维护重试次数非负且不能超过最大重试次数、最后尝试时间不能早于创建时间，
+ * 并要求失败态和重试耗尽态携带最后错误；重试耗尽态还必须满足 {@code retryCount == maxRetries}。</p>
+ *
+ * @param taskId 补偿任务标识，不能为空白
+ * @param orderId 关联订单号
+ * @param action 补偿动作名称或类型，不能为空白
+ * @param status 当前补偿任务状态
+ * @param retryCount 已重试次数，必须非负且不超过最大重试次数
+ * @param maxRetries 最大允许重试次数，必须非负
+ * @param createdAt 补偿任务创建时间，不能为空
+ * @param lastAttemptAt 最近一次尝试时间，可为空；不能早于创建时间
+ * @param lastError 最近一次失败错误；失败态和重试耗尽态必填
+ */
 public record CompensationTask(
         String taskId,
         OrderId orderId,
@@ -14,6 +29,9 @@ public record CompensationTask(
         Instant lastAttemptAt,
         String lastError) {
 
+    /**
+     * 规范化补偿任务文本，校验重试计数和时间线，并强制失败类状态携带错误详情。
+     */
     public CompensationTask {
         taskId = requireText(taskId, "taskId");
         Objects.requireNonNull(orderId, "orderId must not be null");
