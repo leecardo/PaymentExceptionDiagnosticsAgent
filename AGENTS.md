@@ -5,7 +5,7 @@
 ## 项目边界
 
 - 运行时：Java 21；Spring Boot 3.5.16；LangChain4j 1.18.1；MCP Java SDK 2.0.0；Vue 3 + TypeScript + Vite；PostgreSQL + pgvector。
-- 根目录使用 Maven reactor 管理 `backend/` 下五个 Java 模块。
+- `backend/` 目录使用 Maven reactor 管理五个 Java 模块。
 - Java 包根固定为 `com.leecardo.paymentdiagnostics`。
 - 端口约定：API 服务 `8080`；MCP 服务 `8081`；前端 Vite `5173`。
 - 状态响应字段固定为 `service`、`state`；MCP 状态额外包含 `endpoint=/mcp`。
@@ -77,13 +77,13 @@ agent-domain <- agent-application <- agent-api
 
 ```bash
 # 构建所有 Java 模块
-mvn -pl backend -am verify
+cd backend && mvn verify
 
 # 启动 API 服务
-mvn -pl backend/agent-api -am spring-boot:run
+cd backend && mvn -pl agent-api -am spring-boot:run
 
 # 启动 MCP 服务
-mvn -pl backend/mcp-server -am spring-boot:run
+cd backend && mvn -pl mcp-server -am spring-boot:run
 
 # 前端开发服务
 cd frontend && npm install && npm run dev

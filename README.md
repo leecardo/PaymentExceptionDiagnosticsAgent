@@ -62,7 +62,6 @@
 .
 ├── AGENTS.md
 ├── README.md
-├── pom.xml
 ├── backend/
 │   ├── pom.xml
 │   ├── agent-domain/          # 领域模型、值对象、领域不变量
@@ -144,8 +143,8 @@ cp .env.example .env
 ### Java
 
 ```bash
-mvn test
-mvn package
+cd backend && mvn test
+cd backend && mvn package
 ```
 
 ### 前端
@@ -168,13 +167,13 @@ docker compose -f deploy/docker-compose.yml up -d postgres
 先安装本地多模块依赖：
 
 ```bash
-mvn install -DskipTests
+cd backend && mvn install -DskipTests
 ```
 
 启动模拟模式 API：
 
 ```bash
-mvn -f backend/agent-api/pom.xml spring-boot:run -Dspring-boot.run.profiles=simulation
+cd backend && mvn -pl agent-api -am spring-boot:run -Dspring-boot.run.profiles=simulation
 ```
 
 默认端口：`8080`。`simulation` profile 激活后可访问订单和诊断接口。
@@ -182,7 +181,7 @@ mvn -f backend/agent-api/pom.xml spring-boot:run -Dspring-boot.run.profiles=simu
 ### 3. MCP Server
 
 ```bash
-mvn -f backend/mcp-server/pom.xml spring-boot:run
+cd backend && mvn -pl mcp-server -am spring-boot:run
 ```
 
 默认端口：`8081`；MCP 端点：`http://localhost:8081/mcp`。
