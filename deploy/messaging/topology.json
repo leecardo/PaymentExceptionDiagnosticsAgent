@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "statement": "本拓扑为厂商无关描述，不可直接执行。选定具体消息中间件后，必须根据本规范生成或编写具体的 exchange/queue/binding 或 topic/group 资源。",
+  "logicalChannels": [
+    {
+      "name": "payment-events",
+      "description": "支付生命周期事件的逻辑通道",
+      "retention": "bounded"
+    },
+    {
+      "name": "order-state-updates",
+      "description": "订单状态更新请求和确认的逻辑通道",
+      "retention": "bounded"
+    },
+    {
+      "name": "dead-letter",
+      "description": "超过重试上限的消息进入的死信逻辑通道",
+      "retention": "bounded"
+    }
+  ],
+  "eventBindings": [
+    {
+      "eventType": "payment.confirmed",
+      "producer": "payment-service",
+      "consumers": ["order-service"],
+      "logicalChannel": "payment-events",
+      "retryPolicy": {
+        "maxRetries": 3,
+        "backoffStrategy": "exponential",
+        "deadLetterChannel": "dead-letter"
+      },
+      "idempotencyKey": "eventType + orderId"
+    },
+    {
+      "eventType": "order.state-update-requested",
+      "producer": "order-service",
+      "consumers": ["inventory-service", "fulfillment-service"],
+      "logicalChannel": "order-state-updates",
+      "retryPolicy": {
+        "maxRetries": 5,
+        "backoffStrategy": "fixed",
+        "deadLetterChannel": "dead-letter"
+      },
+      "idempotencyKey": "eventType + orderId"
+    },
+    {
+      "eventType": "order.state-updated",
+      "producer": "order-service",
+      "consumers": ["payment-service", "notification-service"],
+      "logicalChannel": "order-state-updates",
+      "retryPolicy": {
+        "maxRetries": 3,
+        "backoffStrategy": "exponential",
+        "deadLetterChannel": "dead-letter"
+      },
+      "idempotencyKey": "eventType + orderId"
+    }
+  ],
+  "forbiddenPayloadFields": [
+    "customerName",
+    "phone",
+    "address",
+    "email",
+    "idCardNumber",
+    "bankCardNumber",
+    "token",
+    "secret",
+    "apiKey",
+    "credential",
+    "password"
+  ]
+}

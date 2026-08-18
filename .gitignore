@@ -1,4 +1,9 @@
 # OS/editor noise
+# IDE generated files
+.project
+.classpath
+.factorypath
+.settings/
 .DS_Store
 Thumbs.db
 .idea/

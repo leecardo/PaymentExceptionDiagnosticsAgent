@@ -27,3 +27,8 @@ app:
     base-url: ${OPENAI_BASE_URL:}
     api-key: ${OPENAI_API_KEY:}
     model-name: ${OPENAI_MODEL_NAME:}
+  diagnosis:
+    payment-processing-timeout: 15m
+    message-consumption-timeout: 5m
+  simulation:
+    scenarios: classpath:simulation/payment-diagnosis-scenarios.json

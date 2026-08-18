@@ -67,13 +67,24 @@ graph TD
 
 ### 5.1 `agent-domain`
 
-职责：
+已实现不可变领域类型：
 
-- 订单与支付状态；
-- 消息和补偿任务状态；
-- `DiagnosisStage`；
-- `DiagnosisEvidence`；
-- 诊断结果及领域不变量。
+- `OrderId`、`OrderStatus`、`OrderRole`、`OrderSnapshot`；
+- `PaymentTransaction`、`PaymentStatus`；
+- `MessageDelivery`、`MessageDeliveryStatus`；
+- `CompensationTask`、`CompensationStatus`；
+- `TraceSummary`；
+- `DiagnosisEvidence`（含稳定证据 ID）、`DiagnosisResult`、`DiagnosisRuleId`、`DiagnosisStage`、`DataMode`。
+
+领域不变量：
+
+- 标识符非空、去首尾空白且长度有上限；
+- 金额使用 `BigDecimal`，不得为负；
+- 商品数量大于零；
+- 更新时间不得早于创建时间；
+- 子订单必须有主订单号，单订单和主订单不得错误携带主订单号；
+- 重试次数不得为负且不得大于最大重试次数；
+- 每个诊断结论至少引用一条证据（`NO_KNOWN_EXCEPTION` 和 `INSUFFICIENT_EVIDENCE` 除外）。
 
 约束：
 
@@ -84,37 +95,49 @@ graph TD
 
 ### 5.2 `agent-application`
 
-职责：
+已实现：
 
-- 诊断用例；
-- 工作流状态转换；
-- 查询、推理、审计和人工确认端口；
-- 诊断停止条件；
-- 工具结果到领域证据的转换。
+- 五类只读查询端口：`OrderQueryPort`、`PaymentQueryPort`、`MessageQueryPort`、`CompensationQueryPort`、`TraceQueryPort`；
+- `FactQueryException`（区分 `UNAVAILABLE` 和 `TIMEOUT`）；
+- `GetOrderUseCase`：构造 `OrderId` 并查询，找不到抛 `OrderNotFoundException`；
+- `DiagnosePaymentExceptionUseCase`：固定顺序收集五类事实后委托规则引擎；
+- `DeterministicDiagnosisRules`：按优先级运行 15 条确定性诊断规则；
+- `DiagnosisPolicy`：配置支付处理超时和消息消费超时阈值；
+- `CollectedFacts`：不可变事实集合。
 
-建议端口：
+固定诊断流程：
 
-- `OrderQueryPort`
-- `PaymentQueryPort`
-- `MessageQueryPort`
-- `CompensationQueryPort`
-- `TraceQueryPort`
-- `DiagnosisReasoningPort`
-- `AgentRunRepository`
-- `ApprovalPort`
+1. 校验订单号；
+2. 查询订单（不存在则短路返回 404）；
+3. 查询关联支付流水；
+4. 查询消息投递事实；
+5. 查询补偿任务事实；
+6. 查询 Trace 摘要；
+7. 将每条事实转换为可追溯证据；
+8. 按优先级运行确定性规则；
+9. 返回阶段、规则编号、证据和数据模式。
 
-这些端口在对应纵向切片实现时创建，不提前生成无调用者的空抽象。
+尚未实现：
+
+- `DiagnosisReasoningPort`（模型推理端口）；
+- `AgentRunRepository`（Agent 运行审计）；
+- `ApprovalPort`（人工审批端口）。
 
 ### 5.3 `agent-infrastructure`
 
-职责：
+已实现：
 
-- PostgreSQL 数据访问；
+- `SimulationConfiguration`（`@Profile("simulation")`）：创建 `SimulationFactStore` 和五个端口 Bean；
+- `SimulationScenarioLoader`：从版本化 JSON 场景文件加载事实，映射 DTO 到领域对象，验证失败时包含逻辑 ID 不暴露文件路径；
+- `SimulationFactStore`：不可变五端口事实存储，按 `OrderId` 分组索引，查询前检查配置的故障；
+- `AiModelConfiguration`：LangChain4j OpenAI 兼容模型配置（`app.ai.enabled=true` 时创建）。
+
+尚未实现：
+
+- PostgreSQL 数据访问适配器；
 - pgvector 检索；
-- LangChain4j 模型配置；
-- MCP Client 或外部接口适配；
-- Agent Run、工具调用和审批审计；
-- 外部调用的超时、错误映射和重试。
+- MCP Client；
+- Agent Run、工具调用和审批审计。
 
 模型配置采用显式开关：
 
@@ -124,25 +147,28 @@ graph TD
 
 ### 5.4 `agent-api`
 
-职责：
+已实现：
 
-- REST 请求与响应；
+- `GET /api/status`：状态检查（所有 profile）；
+- `GET /api/orders/{orderId}`：订单查询（仅 `simulation` profile），返回脱敏订单事实；
+- `GET /api/diagnoses/orders/{orderId}`：诊断查询（仅 `simulation` profile），返回 `dataMode`、`stage`、`ruleId`、`evidence[]` 和 `warnings[]`；
+- `ApiExceptionHandler`：稳定错误响应，不暴露堆栈/SQL/路径；
+- `DiagnosticUseCaseConfiguration`：`@Profile("simulation")` 装配诊断用例 Bean。
+
+已实现错误响应：
+
+| 错误码 | HTTP 状态 | 触发条件 |
+|---|---|---|
+| `INVALID_ORDER_ID` | 400 | 订单号不合法 |
+| `ORDER_NOT_FOUND` | 404 | 订单不存在 |
+| `FACT_SOURCE_UNAVAILABLE` | 503 | 数据源不可用 |
+| `FACT_SOURCE_TIMEOUT` | 503 | 数据源超时 |
+
+尚未实现：
+
 - SSE 事件流；
-- 参数校验；
-- 错误码和错误响应；
-- 应用装配；
-- 健康与状态接口。
-
-后续接口草案：
-
-| 接口 | 用途 |
-|---|---|
-| `POST /api/diagnoses` | 创建诊断任务 |
-| `GET /api/diagnoses/{runId}` | 查询当前诊断状态和结果 |
-| `GET /api/diagnoses/{runId}/events` | SSE 订阅执行轨迹 |
-| `POST /api/diagnoses/{runId}/approvals/{approvalId}` | 提交人工审批决定 |
-
-接口名称和 Schema 在实现切片时通过契约测试确定。
+- 诊断任务创建和管理；
+- 人工审批接口。
 
 ### 5.5 `mcp-server`
 
@@ -214,51 +240,72 @@ stateDiagram-v2
 
 ## 7. 领域模型
 
-建议逐步引入：
+### 7.1 业务实体（已实现）
 
-### 7.1 业务实体
+| 类型 | 说明 |
+|---|---|
+| `OrderId` | 订单标识符，正则 `[A-Za-z0-9._-]{1,64}` |
+| `OrderStatus` | 订单状态枚举，对应 `prod_order_user.ORDER_STATE` |
+| `OrderRole` | 订单角色：SINGLE / MASTER / SUB |
+| `OrderSnapshot` | 订单快照，含金额非负、数量>0、更新时间≥创建时间等不变量 |
+| `PaymentTransaction` | 支付流水，FAILED 必须有错误码和摘要 |
+| `PaymentStatus` | REQUESTED → PROCESSING → PROVIDER_SUCCEEDED → CALLBACK_RECEIVED / FAILED |
+| `MessageDelivery` | 消息投递记录，各状态有时间戳和 lastError 约束 |
+| `MessageDeliveryStatus` | PENDING / SENT / SEND_FAILED / CONSUMED / CONSUME_FAILED |
+| `CompensationTask` | 补偿任务，重试次数≤最大重试 |
+| `CompensationStatus` | PENDING / RUNNING / SUCCEEDED / FAILED / RETRIES_EXHAUSTED |
+| `TraceSummary` | 调用链路摘要，traceId 非空 |
+| `DiagnosisEvidence` | 诊断证据（id, source, summary, observedAt） |
+| `DiagnosisResult` | 诊断结果（orderId, dataMode, stage, ruleId, summary, evidence, warnings） |
 
-- `OrderSnapshot`
-- `PaymentTransaction`
-- `MessageDelivery`
-- `CompensationTask`
-- `TraceSummary`
+### 7.2 诊断阶段（已实现）
 
-### 7.2 Agent 实体
+| 阶段 | 说明 |
+|---|---|
+| `ORDER_CREATED` | 订单已创建 |
+| `PAYMENT_REQUESTED` | 支付已发起 |
+| `PAYMENT_CONFIRMED` | 支付已确认 |
+| `PAYMENT_CALLBACK` | 支付回调阶段 |
+| `ORDER_STATE_UPDATE` | 订单状态回写 |
+| `MESSAGE_DELIVERY` | 消息投递 |
+| `COMPENSATION` | 补偿执行 |
+| `TRACE_CORRELATION` | 调用链路关联 |
+| `COMPLETED` | 正常完成 |
+| `INSUFFICIENT_EVIDENCE` | 证据不足 |
+
+### 7.3 Agent 实体（尚未实现）
 
 - `DiagnosisRun`
-- `DiagnosisEvidence`
 - `ToolInvocation`
 - `DiagnosisConclusion`
 - `ApprovalRequest`
 
-### 7.3 诊断阶段
-
-阶段应对应可解释的支付链路，例如：
-
-- 订单创建；
-- 支付发起；
-- 第三方支付处理；
-- 支付回调；
-- 订单状态回写；
-- 消息投递；
-- 消息消费；
-- 补偿执行；
-- 无法判断。
-
 ## 8. 数据设计
 
-建议按职责分表：
+### 8.1 演示业务数据（Flyway V2 已创建）
 
-### 8.1 演示业务数据
+| 表 | 说明 |
+|---|---|
+| `orders` | 脱敏订单快照（无客户身份字段） |
+| `payment_transactions` | 支付流水 |
+| `message_deliveries` | 消息投递 |
+| `compensation_tasks` | 补偿任务 |
+| `trace_summaries` | 调用链路摘要 |
 
-- `orders`
-- `payment_transactions`
-- `message_deliveries`
-- `compensation_tasks`
-- `trace_summaries`
+所有表包含主键、外键（ON DELETE RESTRICT）、CHECK 约束（与 Java 枚举一致）和按订单号查询的索引。
 
-### 8.2 Agent 审计
+脱敏演示数据 SQL 位于 `deploy/postgres/demo/001_payment_diagnosis_scenarios.sql`，使用 `INSERT ... ON CONFLICT DO UPDATE` 实现幂等。
+
+### 8.2 消息事件契约（已创建）
+
+| 文件 | 说明 |
+|---|---|
+| `deploy/messaging/payment-events.schema.json` | JSON Schema draft 2020-12，定义事件信封 |
+| `deploy/messaging/topology.json` | 厂商无关逻辑拓扑 |
+
+三个逻辑事件：`payment.confirmed`、`order.state-update-requested`、`order.state-updated`。
+
+### 8.3 Agent 审计（尚未实现）
 
 - `diagnosis_runs`
 - `diagnosis_evidence`
@@ -266,7 +313,7 @@ stateDiagram-v2
 - `approval_requests`
 - `model_invocations`
 
-### 8.3 RAG
+### 8.4 RAG（尚未实现）
 
 - `knowledge_documents`
 - `knowledge_chunks`
@@ -396,22 +443,25 @@ stateDiagram-v2
 已实现：
 
 - Maven 五模块结构；
-- 基础领域证据和诊断阶段；
-- OpenAI 兼容 LangChain4j 配置边界；
-- Agent API 状态接口；
+- 领域层：订单、支付、消息、补偿、Trace 五类不可变事实类型，15 条确定性诊断规则；
+- 应用层：五类只读查询端口、订单查询用例、诊断用例、固定顺序证据收集流程；
+- 基础设施层：版本化 JSON 场景加载器、不可变五端口内存适配器、15 个模拟场景、LangChain4j 配置边界；
+- 接口层：订单查询 API、诊断查询 API、稳定错误响应（400/404/503）；
+- 部署资产：Flyway V2 建表迁移、脱敏演示数据 SQL、厂商无关消息事件契约和拓扑描述；
 - Java MCP Streamable HTTP 初始化；
 - Vue 状态页面；
-- pgvector Compose 与初始化 SQL；
-- Java 单元/接口测试和前端构建。
+- 148 个测试全部通过；
+- API 烟雾流程已执行验证。
 
-未实现：
+尚未实现：
 
-- 支付业务数据模型和迁移；
-- 订单及支付查询；
+- 真实 PostgreSQL + Flyway 迁移执行验证；
+- Testcontainers 仓储测试；
 - MCP 业务工具；
 - Agent 工作流和 SSE；
 - 人工审批；
 - RAG；
-- Agent 评测与完整可观测性。
+- Agent 评测与完整可观测性；
+- 前端诊断页面。
 
-具体实施顺序见[开发路线](../roadmap/development-roadmap.md)。
+具体实施顺序见[开发路线](../roadmap/development-roadmap.md)和[模拟流程设计](simulation-flow.md)。

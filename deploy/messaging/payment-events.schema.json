@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://payment-diagnostics.local/schemas/payment-events.schema.json",
+  "title": "Payment Diagnostic Event Envelope",
+  "description": "厂商无关的支付诊断消息事件契约。仅定义逻辑事件结构，不可直接在任何特定消息中间件上执行。选定消息中间件后，根据此契约生成或编写具体的 exchange/queue/binding 或 topic/group 资源。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "eventVersion", "orderId", "correlationId", "occurredAt", "payload"],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "description": "唯一事件标识，用于幂等控制",
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "eventType": {
+      "type": "string",
+      "description": "逻辑事件类型",
+      "enum": [
+        "payment.confirmed",
+        "order.state-update-requested",
+        "order.state-updated"
+      ]
+    },
+    "eventVersion": {
+      "type": "integer",
+      "description": "事件 Schema 版本",
+      "const": 1
+    },
+    "orderId": {
+      "type": "string",
+      "description": "关联订单号",
+      "pattern": "^[A-Za-z0-9._-]{1,64}$"
+    },
+    "correlationId": {
+      "type": "string",
+      "description": "跨服务追踪关联键",
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "事件发生的 ISO-8601 时间戳"
+    },
+    "payload": {
+      "type": "object",
+      "description": "事件业务负载",
+      "additionalProperties": false,
+      "properties": {
+        "paymentStatus": {
+          "type": ["string", "null"],
+          "description": "支付状态（可选）",
+          "enum": ["REQUESTED", "PROCESSING", "PROVIDER_SUCCEEDED", "CALLBACK_RECEIVED", "FAILED", null]
+        },
+        "orderStatus": {
+          "type": ["string", "null"],
+          "description": "订单状态（可选）",
+          "enum": ["PENDING_PAYMENT", "CANCELLED", "PAID", "OUTBOUND", "SHIPPED", "SIGNED", "COMPLETED", "CLOSED", null]
+        },
+        "providerErrorCode": {
+          "type": ["string", "null"],
+          "description": "供应商错误码（仅支付失败时）"
+        },
+        "providerErrorSummary": {
+          "type": ["string", "null"],
+          "description": "供应商错误摘要（仅支付失败时）"
+        },
+        "summary": {
+          "type": ["string", "null"],
+          "description": "事件摘要说明"
+        }
+      }
+    },
+    "idempotencyKey": {
+      "type": ["string", "null"],
+      "description": "可选的显式幂等键，由事件类型和订单号派生",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    }
+  },
+  "$defs": {
+    "forbiddenFields": {
+      "description": "以下字段禁止出现在任何事件信封或负载中",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "const": [
+        "customerName",
+        "phone",
+        "address",
+        "email",
+        "idCardNumber",
+        "bankCardNumber",
+        "token",
+        "secret",
+        "apiKey",
+        "credential",
+        "password"
+      ]
+    }
+  }
+}
